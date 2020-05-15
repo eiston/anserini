@@ -21,7 +21,7 @@ Sorted by number of commits:
 + Jimmy Lin ([lintool](https://github.com/lintool))
 + Edwin Zhang ([edwinzhng](https://github.com/edwinzhng))
 + Tommaso Teofili ([tteofili](https://github.com/tteofili))
-+ Yuqi Kiu ([yuki617](https://github.com/yuki617))
++ Yuqi Liu ([yuki617](https://github.com/yuki617))
 + Kuang Lu ([lukuang](https://github.com/lukuang))
 
 ## All Contributors
@@ -77,7 +77,7 @@ Sorted by number of commits, [according to GitHub](https://github.com/castorini/
 + Charles Wu ([charW](https://github.com/charW))
 + Matteo Catena ([catenamatteo](https://github.com/catenamatteo))
 + Andrew Yates ([andrewyates](https://github.com/andrewyates))
-+ Alireza Mirzaeiyan ([alirezamirzaeiyan](https://github.com/alirezamirzaeiyan))
++ Alireza Mirzaeiyan ([amirzaeiyan](https://github.com/amirzaeiyan))
 + Antonio Mallia ([amallia](https://github.com/amallia))
 + Horatiu Lazu ([MathBunny](https://github.com/MathBunny))
 + Edward Li ([LuKuuu](https://github.com/LuKuuu))

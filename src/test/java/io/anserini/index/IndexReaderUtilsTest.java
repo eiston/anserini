@@ -19,6 +19,8 @@ package io.anserini.index;
 import io.anserini.IndexerTestBase;
 import io.anserini.analysis.AnalyzerUtils;
 import io.anserini.analysis.DefaultEnglishAnalyzer;
+import io.anserini.search.SearchArgs;
+import io.anserini.search.SimpleSearcher;
 import org.apache.lucene.index.DirectoryReader;
 import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.index.MultiTerms;
@@ -29,6 +31,7 @@ import org.apache.lucene.search.IndexSearcher;
 import org.apache.lucene.search.TermQuery;
 import org.apache.lucene.search.TopDocs;
 import org.apache.lucene.search.similarities.BM25Similarity;
+import org.apache.lucene.search.similarities.Similarity;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.store.FSDirectory;
 import org.apache.lucene.util.BytesRef;
@@ -68,6 +71,9 @@ public class IndexReaderUtilsTest extends IndexerTestBase {
     assertEquals(Long.valueOf(3), termCountMap.get("collectionFreq"));
     assertEquals(Long.valueOf(2), termCountMap.get("docFreq"));
 
+    termCountMap = IndexReaderUtils.getTermCounts(reader, "some text");
+    assertEquals(Long.valueOf(1), termCountMap.get("docFreq"));
+
     reader.close();
     dir.close();
   }
@@ -99,6 +105,9 @@ public class IndexReaderUtilsTest extends IndexerTestBase {
     termCountMap = IndexReaderUtils.getTermCountsWithAnalyzer(reader, "text", analyzer);
     assertEquals(Long.valueOf(3), termCountMap.get("collectionFreq"));
     assertEquals(Long.valueOf(2), termCountMap.get("docFreq"));
+
+    termCountMap = IndexReaderUtils.getTermCountsWithAnalyzer(reader, "some text", analyzer);
+    assertEquals(Long.valueOf(1), termCountMap.get("docFreq"));
 
     reader.close();
     dir.close();
@@ -266,6 +275,9 @@ public class IndexReaderUtilsTest extends IndexerTestBase {
 
   @Test
   public void computeAllTermBM25Weights() throws Exception {
+    SearchArgs args = new SearchArgs();
+    Similarity similarity = new BM25Similarity(Float.parseFloat(args.bm25_k1[0]), Float.parseFloat(args.bm25_b[0]));
+
     Directory dir = FSDirectory.open(tempDir1);
     IndexReader reader = DirectoryReader.open(dir);
 
@@ -280,7 +292,7 @@ public class IndexReaderUtilsTest extends IndexerTestBase {
       String term = text.utf8ToString();
 
       IndexSearcher searcher = new IndexSearcher(reader);
-      searcher.setSimilarity(new BM25Similarity());
+      searcher.setSimilarity(similarity);
 
       TopDocs rs = searcher.search(new TermQuery(new Term("contents", term)), 3);
       for (int i=0; i<rs.scoreDocs.length; i++) {
@@ -301,10 +313,36 @@ public class IndexReaderUtilsTest extends IndexerTestBase {
       termsEnum = termVector.iterator();
       while ((text = termsEnum.next()) != null) {
         String term = text.utf8ToString();
-        float weight = IndexReaderUtils.getBM25TermWeight(reader, docid, term);
+        float weight = IndexReaderUtils.getBM25AnalyzedTermWeight(reader, docid, term);
         assertEquals(termDocMatrix.get(term).get(docid), weight, 10e-6);
       }
     }
+
+    reader.close();
+    dir.close();
+  }
+
+  @Test
+  public void computeBM25Weights() throws Exception {
+    SearchArgs args = new SearchArgs();
+
+    Directory dir = FSDirectory.open(tempDir1);
+    IndexReader reader = DirectoryReader.open(dir);
+
+    assertEquals(0.43400, IndexReaderUtils.getBM25UnanalyzedTermWeightWithParameters(reader, "doc1",
+        "city", IndexCollection.DEFAULT_ANALYZER,0.9f, 0.4f), 10e-5);
+    assertEquals(0.43400, IndexReaderUtils.getBM25AnalyzedTermWeightWithParameters(reader, "doc1",
+        "citi", 0.9f, 0.4f), 10e-5);
+
+    assertEquals(0.0f, IndexReaderUtils.getBM25UnanalyzedTermWeightWithParameters(reader, "doc2",
+        "city", IndexCollection.DEFAULT_ANALYZER,0.9f, 0.4f), 10e-5);
+    assertEquals(0.0f, IndexReaderUtils.getBM25AnalyzedTermWeightWithParameters(reader, "doc2",
+        "citi", 0.9f, 0.4f), 10e-5);
+
+    assertEquals(0.570250, IndexReaderUtils.getBM25UnanalyzedTermWeightWithParameters(reader, "doc3",
+        "test", IndexCollection.DEFAULT_ANALYZER,0.9f, 0.4f), 10e-5);
+    assertEquals(0.570250, IndexReaderUtils.getBM25AnalyzedTermWeightWithParameters(reader, "doc3",
+        "test", 0.9f, 0.4f), 10e-5);
 
     reader.close();
     dir.close();
@@ -424,6 +462,35 @@ public class IndexReaderUtilsTest extends IndexerTestBase {
     assertEquals(1, IndexReaderUtils.convertDocidToLuceneDocid(reader, "doc2"));
     assertEquals(2, IndexReaderUtils.convertDocidToLuceneDocid(reader, "doc3"));
     assertEquals(-1, IndexReaderUtils.convertDocidToLuceneDocid(reader, "doc42"));
+
+    reader.close();
+    dir.close();
+  }
+
+  @Test
+  public void testComputeQueryDocumentScore() throws Exception {
+    SimpleSearcher searcher = new SimpleSearcher(tempDir1.toString());
+    Directory dir = FSDirectory.open(tempDir1);
+    IndexReader reader = DirectoryReader.open(dir);
+    Similarity similarity = new BM25Similarity(0.9f, 0.4f);
+
+    // A bunch of test queries...
+    String[] queries = {"text city", "text", "city"};
+
+    for (String query: queries) {
+      SimpleSearcher.Result[] results = searcher.search(query);
+
+      // Strategy is to loop over the results, compute query-document score individually, and compare.
+      for (int i = 0; i < results.length; i++) {
+        float score = IndexReaderUtils.computeQueryDocumentScoreWithSimilarity(
+            reader, results[i].docid, query, similarity);
+        assertEquals(score, results[i].score, 10e-5);
+      }
+
+      // This is hard coded - doc3 isn't retrieved by any of the queries.
+      assertEquals(0.0f, IndexReaderUtils.computeQueryDocumentScoreWithSimilarity(
+              reader, "doc3", query, similarity), 10e-6);
+    }
 
     reader.close();
     dir.close();
